@@ -1,7 +1,41 @@
 import SECRETS
 import requests
 from colorama import Fore
-import base64
+import time
+import threading
+import keyboard
+
+ACCESS_TOKEN = None
+REFRESH_TOKEN = None
+
+SKIP_COUNTER = 0
+CURRENT_VETO_SONG_ID = 0
+
+class Passenger:
+    def __init__(self, veto_counter: int, gpio_pins: int [2]):
+        self.veto_counter = veto_counter
+        self.gpio_pins = gpio_pins
+        self.last_song_skipped = "0"
+    
+    def skip(self):
+        current_song_id = get_current_playing_track(ACCESS_TOKEN).item.id
+
+        if current_song_id == CURRENT_VETO_SONG_ID:
+            print("Song is protected by veto")
+            return
+
+        if current_song_id != self.last_song_skipped:
+            self.last_song_skipped = current_song_id
+            SKIP_COUNTER += 1
+
+            if SKIP_COUNTER > 2:
+                skip_track(ACCESS_TOKEN)
+                SKIP_COUNTER = 0
+    
+    def veto(self):
+        SKIP_COUNTER = 0
+        CURRENT_VETO_SONG_ID = get_current_playing_track(ACCESS_TOKEN).item.id
+
 
 def get_current_playing_track(access_token: str) -> dict:
     # Spotify endpoint for the currently playing track
@@ -102,15 +136,33 @@ def get_Initial_Access_And_Refresh_Token() -> dict:
         print(Fore.RED + f"Error while retrieving initial access token: {e}")
         return None
 
+def refresh_Access_Token() -> None:
+    while True:
+        print(f"Refreshing Token with {REFRESH_TOKEN}")
+        time.sleep(5)
+
+def on_Key_Event(event):
+    print(f"Key '{event.name}' pressed!")
+
+def on_GPIO_Event():
+    print("TODO")
+
+
 def start():
-    #initial_access = get_Initial_Access_And_Refresh_Token()
-    initial_access = {'access_token': 'BQCcp89YsEAHxO9aFQg_bHEVuNb0hnAwP6PwvY7l2NhkelgKLEyIooBmEko_CfNXa0JtkoUZenj_m_yD1khiB6z3vs5yDRfA7r3NpvLcEENFs83rWUI7Jtd6XAkcKFnUMI2vpsNJdD3JzOMAlgRlPtvYbAdfCms4g_9LsopmNVWXTyvn51o4cLJe2kf0mj1uXP7WjCiQ37wNabpE71hp', 'token_type': 'Bearer', 'expires_in': 3600, 'refresh_token': 'AQDZX0b4QIoZBni3bvP4orUHN2gGb-qDZAF3zYX5iwJrhj8bJ5Rfcrrsat1OSH2QlOgKXKOykITSVTwNYBga3i8mK2uPdU3XDBlVLIjsCgu441zeahnqUQ_rZj9_nU5jNWQ', 'scope': 'user-modify-playback-state user-read-currently-playing'}
+    initial_access = get_Initial_Access_And_Refresh_Token()
+    #initial_access = {'access_token': 'BQCcp89YsEAHxO9aFQg_bHEVuNb0hnAwP6PwvY7l2NhkelgKLEyIooBmEko_CfNXa0JtkoUZenj_m_yD1khiB6z3vs5yDRfA7r3NpvLcEENFs83rWUI7Jtd6XAkcKFnUMI2vpsNJdD3JzOMAlgRlPtvYbAdfCms4g_9LsopmNVWXTyvn51o4cLJe2kf0mj1uXP7WjCiQ37wNabpE71hp', 'token_type': 'Bearer', 'expires_in': 3600, 'refresh_token': 'AQDZX0b4QIoZBni3bvP4orUHN2gGb-qDZAF3zYX5iwJrhj8bJ5Rfcrrsat1OSH2QlOgKXKOykITSVTwNYBga3i8mK2uPdU3XDBlVLIjsCgu441zeahnqUQ_rZj9_nU5jNWQ', 'scope': 'user-modify-playback-state user-read-currently-playing'}
 
     ACCESS_TOKEN = initial_access['access_token']
     REFRESH_TOKEN = initial_access['refresh_token']
     
     #print(get_current_playing_track(ACCESS_TOKEN))
-    skip_track(ACCESS_TOKEN)
+    #skip_track(ACCESS_TOKEN)
+
+    token_refresh_thread = threading.Thread(target=refresh_Access_Token, args=("access1", "refresh1"), daemon=True)
+    #token_refresh_thread.start()
+
+    keyboard.on_press(on_Key_Event)
+    keyboard.wait('q')
 
 
 
@@ -137,7 +189,7 @@ def main():
         elif (choice == "4"):
             print(Fore.YELLOW + "Exiting...")
             print(Fore.WHITE + "")
-            break
+            exit()
         else:
             print(Fore.RED + "Invalid Option. Please Try Again.")
 
