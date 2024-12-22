@@ -31,7 +31,7 @@ class Passenger:
 
         if current_song_id.item.id != self.last_song_skipped:
             self.last_song_skipped = current_song_id
-            
+
             if current_song_id.progress_ms < 10000:
                 SKIPS_IN_FIRST_10_SECONDS += 1
 
@@ -155,8 +155,33 @@ def get_Initial_Access_And_Refresh_Token() -> dict:
         return None
 
 def refresh_Access_Token() -> None:
+    global ACCESS_TOKEN
+    global REFRESH_TOKEN
+
+    refresh_endpoint = "https://accounts.spotify.com/api/token"
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+
     while True:
         print(f"Refreshing Token with {REFRESH_TOKEN}")
+
+        body = {
+            "grant_type": "refresh_token",
+            "refresh_token": REFRESH_TOKEN
+        }
+
+        try:
+            response = requests.post(refresh_endpoint, data=body, headers=headers)
+
+            response.raise_for_status()
+
+            if response.status_code == 200:
+                ACCESS_TOKEN = response.json().access_token
+                REFRESH_TOKEN = response.json().refresh_token
+            
+        except requests.exceptions.RequestException as e:
+            print(Fore.RED + f"Error while refreshing access token: {e}")
         time.sleep(5)
 
 def on_Key_Event(event):
