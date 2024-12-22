@@ -11,6 +11,8 @@ REFRESH_TOKEN = None
 SKIP_COUNTER = 0
 CURRENT_VETO_SONG_ID = 0
 
+SKIPS_IN_FIRST_10_SECONDS = 0
+
 class Passenger:
     def __init__(self, veto_counter: int, gpio_pins: int [2]):
         self.veto_counter = veto_counter
@@ -18,21 +20,37 @@ class Passenger:
         self.last_song_skipped = "0"
     
     def skip(self):
-        current_song_id = get_current_playing_track(ACCESS_TOKEN).item.id
+        global SKIP_COUNTER
+        global SKIPS_IN_FIRST_10_SECONDS
 
-        if current_song_id == CURRENT_VETO_SONG_ID:
+        current_song_id = get_current_playing_track(ACCESS_TOKEN)
+
+        if current_song_id.item.id == CURRENT_VETO_SONG_ID:
             print("Song is protected by veto")
             return
 
-        if current_song_id != self.last_song_skipped:
+        if current_song_id.item.id != self.last_song_skipped:
             self.last_song_skipped = current_song_id
+            
+            if current_song_id.progress_ms < 10000:
+                SKIPS_IN_FIRST_10_SECONDS += 1
+
+                if SKIPS_IN_FIRST_10_SECONDS == 2:
+                    skip_track(ACCESS_TOKEN)
+                    SKIP_COUNTER = 0
+                    SKIPS_IN_FIRST_10_SECONDS = 0
+
             SKIP_COUNTER += 1
 
             if SKIP_COUNTER > 2:
                 skip_track(ACCESS_TOKEN)
                 SKIP_COUNTER = 0
+                SKIPS_IN_FIRST_10_SECONDS = 0
     
     def veto(self):
+        global SKIP_COUNTER
+        global CURRENT_VETO_SONG_ID
+
         SKIP_COUNTER = 0
         CURRENT_VETO_SONG_ID = get_current_playing_track(ACCESS_TOKEN).item.id
 
