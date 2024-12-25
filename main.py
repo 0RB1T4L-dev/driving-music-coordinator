@@ -1,9 +1,11 @@
+import requests.auth
 import SECRETS
 import requests
 from colorama import Fore
 import time
 import threading
-import keyboard
+import base64
+import RPi.GPIO as GPIO
 
 ACCESS_TOKEN = None
 REFRESH_TOKEN = None
@@ -13,10 +15,12 @@ CURRENT_VETO_SONG_ID = 0
 
 SKIPS_IN_FIRST_10_SECONDS = 0
 
+VETOS_PER_PASSENGER = 20
+
 class Passenger:
-    def __init__(self, veto_counter: int, gpio_pins: int [2]):
+    def __init__(self, veto_counter: int):
         self.veto_counter = veto_counter
-        self.gpio_pins = gpio_pins
+        self.gpio_pins = 0
         self.last_song_skipped = "0"
     
     def skip(self):
@@ -53,7 +57,6 @@ class Passenger:
 
         SKIP_COUNTER = 0
         CURRENT_VETO_SONG_ID = get_current_playing_track(ACCESS_TOKEN).item.id
-
 
 def get_current_playing_track(access_token: str) -> dict:
     # Spotify endpoint for the currently playing track
@@ -159,55 +162,95 @@ def refresh_Access_Token() -> None:
     global REFRESH_TOKEN
 
     refresh_endpoint = "https://accounts.spotify.com/api/token"
+    auth_header = base64.b64encode(f"{SECRETS.SPOTIFY_CLIENT_ID}:{SECRETS.SPOTIFY_CLIENT_SECRET}".encode()).decode()
     headers = {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': f"Basic {auth_header}",
+        "Cache-Control": "no-cache"
     }
 
     while True:
+        time.sleep(3300)
+
         print(f"Refreshing Token with {REFRESH_TOKEN}")
 
-        body = {
+        data = {
             "grant_type": "refresh_token",
-            "refresh_token": REFRESH_TOKEN
+            "refresh_token": REFRESH_TOKEN,
         }
 
         try:
-            response = requests.post(refresh_endpoint, data=body, headers=headers)
+            response = requests.post(refresh_endpoint, data=data, headers=headers)
 
             response.raise_for_status()
 
             if response.status_code == 200:
-                ACCESS_TOKEN = response.json().access_token
-                REFRESH_TOKEN = response.json().refresh_token
+                ACCESS_TOKEN = response.json()['access_token']
+                #REFRESH_TOKEN = response.json().refresh_token
+                print("New Access Token: " + ACCESS_TOKEN)
+                print("New Refresh Token: " + REFRESH_TOKEN)
             
         except requests.exceptions.RequestException as e:
             print(Fore.RED + f"Error while refreshing access token: {e}")
-        time.sleep(5)
-
-def on_Key_Event(event):
-    print(f"Key '{event.name}' pressed!")
 
 def on_GPIO_Event():
     print("TODO")
 
 
 def start():
+    global ACCESS_TOKEN
+    global REFRESH_TOKEN
+
+    # =================== HANDLE EXPIRING ACCESS TOKEN ==============================
     initial_access = get_Initial_Access_And_Refresh_Token()
-    #initial_access = {'access_token': 'BQCcp89YsEAHxO9aFQg_bHEVuNb0hnAwP6PwvY7l2NhkelgKLEyIooBmEko_CfNXa0JtkoUZenj_m_yD1khiB6z3vs5yDRfA7r3NpvLcEENFs83rWUI7Jtd6XAkcKFnUMI2vpsNJdD3JzOMAlgRlPtvYbAdfCms4g_9LsopmNVWXTyvn51o4cLJe2kf0mj1uXP7WjCiQ37wNabpE71hp', 'token_type': 'Bearer', 'expires_in': 3600, 'refresh_token': 'AQDZX0b4QIoZBni3bvP4orUHN2gGb-qDZAF3zYX5iwJrhj8bJ5Rfcrrsat1OSH2QlOgKXKOykITSVTwNYBga3i8mK2uPdU3XDBlVLIjsCgu441zeahnqUQ_rZj9_nU5jNWQ', 'scope': 'user-modify-playback-state user-read-currently-playing'}
 
     ACCESS_TOKEN = initial_access['access_token']
     REFRESH_TOKEN = initial_access['refresh_token']
     
-    #print(get_current_playing_track(ACCESS_TOKEN))
-    #skip_track(ACCESS_TOKEN)
+    print(get_current_playing_track(ACCESS_TOKEN))
 
-    token_refresh_thread = threading.Thread(target=refresh_Access_Token, args=("access1", "refresh1"), daemon=True)
-    #token_refresh_thread.start()
+    token_refresh_thread = threading.Thread(target=refresh_Access_Token, daemon=True)
+    token_refresh_thread.start()
+    # ===============================================================================
 
-    keyboard.on_press(on_Key_Event)
-    keyboard.wait('q')
+    driver = Passenger(VETOS_PER_PASSENGER)
+    passenger1 = Passenger(VETOS_PER_PASSENGER)
+    passenger2 = Passenger(VETOS_PER_PASSENGER)
+    passenger3 = Passenger(VETOS_PER_PASSENGER)
 
+    # =================== GPIO ACTION ===============================================
+    # Set up GPIO mode
+    GPIO.setmode(GPIO.BCM)
 
+    # Define the button pins
+    BUTTONS = {
+        1: {"pin": 17, "passenger": driver},
+        2: {"pin": 18, "passenger": driver},
+        3: {"pin": 22, "passenger": passenger1},
+        4: {"pin": 20, "passenger": passenger1},
+        5: {"pin": 21, "passenger": passenger2},
+    }
+
+    # Set up the GPIO pins for input
+    for button, data in BUTTONS.items():
+        GPIO.setup(data["pin"], GPIO.IN)
+
+    try:
+        while True:
+            for button, data in BUTTONS.items():
+                time.sleep(0.05)  # Add a small delay
+                if GPIO.input(data["pin"]) < GPIO.HIGH:
+                    if button % 2 == 0:
+                        data["passenger"].skip()
+                    else:
+                        data["passenger"].veto()
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        GPIO.cleanup()  # Clean up the GPIO pins
+    # ===============================================================================
 
 def main():
     while True:
