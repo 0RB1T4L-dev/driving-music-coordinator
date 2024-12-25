@@ -5,7 +5,7 @@ from colorama import Fore
 import time
 import threading
 import base64
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 
 ACCESS_TOKEN = None
 REFRESH_TOKEN = None
@@ -28,6 +28,7 @@ class Passenger:
         global SKIPS_IN_FIRST_10_SECONDS
 
         current_song = get_current_playing_track(ACCESS_TOKEN)
+        print(current_song)
 
         if current_song["item"]["id"] == CURRENT_VETO_SONG_ID:
             print("Song is protected by veto")
@@ -83,19 +84,7 @@ def get_current_playing_track(access_token: str) -> dict:
         response.raise_for_status()
         
         # Parse and return the JSON response
-        track_data = response.json()
-        
-        # Extract relevant details (track name, artist, album)
-        if track_data:
-            track_info = {
-                "track_name": track_data["item"]["name"],
-                "artist_name": ", ".join(artist["name"] for artist in track_data["item"]["artists"]),
-                "album_name": track_data["item"]["album"]["name"],
-                "is_playing": track_data["is_playing"]
-            }
-            return track_info
-        else:
-            return None
+        return response.json()
     
     except requests.exceptions.RequestException as e:
         print(f"Error while retrieving current playing track: {e}")
@@ -252,6 +241,25 @@ def start():
         GPIO.cleanup()  # Clean up the GPIO pins
     # ===============================================================================
 
+def start_debug():
+    global ACCESS_TOKEN
+    global REFRESH_TOKEN
+
+    # =================== HANDLE EXPIRING ACCESS TOKEN ==============================
+    initial_access = get_Initial_Access_And_Refresh_Token()
+
+    ACCESS_TOKEN = initial_access['access_token']
+    REFRESH_TOKEN = initial_access['refresh_token']
+    
+    #print(get_current_playing_track(ACCESS_TOKEN))
+
+    token_refresh_thread = threading.Thread(target=refresh_Access_Token, daemon=True)
+    #token_refresh_thread.start()
+    # ===============================================================================
+
+    driver = Passenger(VETOS_PER_PASSENGER)
+    driver.skip()
+
 def main():
     while True:
         # Present the menu options to the user
@@ -269,7 +277,7 @@ def main():
             print(Fore.WHITE + "\nPlease visit the following URL and login to receive the authorization code:")
             print(Fore.WHITE + construct_Login_Url())
         elif (choice == "2"):
-            start()
+            start_debug()
         elif (choice == "3"):
             print(Fore.WHITE + print_Help())
         elif (choice == "4"):
