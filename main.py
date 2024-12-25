@@ -5,7 +5,7 @@ from colorama import Fore
 import time
 import threading
 import base64
-#import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO
 
 ACCESS_TOKEN = None
 REFRESH_TOKEN = None
@@ -259,7 +259,7 @@ def main():
             print(Fore.WHITE + "\nPlease visit the following URL and login to receive the authorization code:")
             print(Fore.WHITE + construct_Login_Url())
         elif (choice == "2"):
-            start_debug()
+            start()
         elif (choice == "3"):
             print(Fore.WHITE + print_Help())
         elif (choice == "4"):
