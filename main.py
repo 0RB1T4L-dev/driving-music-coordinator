@@ -27,19 +27,20 @@ class Passenger:
         global SKIP_COUNTER
         global SKIPS_IN_FIRST_10_SECONDS
 
-        current_song_id = get_current_playing_track(ACCESS_TOKEN)
+        current_song = get_current_playing_track(ACCESS_TOKEN)
 
-        if current_song_id.item.id == CURRENT_VETO_SONG_ID:
+        if current_song["item"]["id"] == CURRENT_VETO_SONG_ID:
             print("Song is protected by veto")
             return
 
-        if current_song_id.item.id != self.last_song_skipped:
-            self.last_song_skipped = current_song_id
+        if current_song["item"]["id"] != self.last_song_skipped:
+            self.last_song_skipped = current_song
 
-            if current_song_id.progress_ms < 10000:
+            if current_song["progress_ms"] < 10000:
                 SKIPS_IN_FIRST_10_SECONDS += 1
 
                 if SKIPS_IN_FIRST_10_SECONDS == 2:
+                    print("Skipping song...")
                     skip_track(ACCESS_TOKEN)
                     SKIP_COUNTER = 0
                     SKIPS_IN_FIRST_10_SECONDS = 0
@@ -56,7 +57,9 @@ class Passenger:
         global CURRENT_VETO_SONG_ID
 
         SKIP_COUNTER = 0
-        CURRENT_VETO_SONG_ID = get_current_playing_track(ACCESS_TOKEN).item.id
+        if self.veto_counter > 0:
+            print("Song is now protected by veto...")
+            CURRENT_VETO_SONG_ID = get_current_playing_track(ACCESS_TOKEN)["item"]["id"]
 
 def get_current_playing_track(access_token: str) -> dict:
     # Spotify endpoint for the currently playing track
@@ -192,9 +195,6 @@ def refresh_Access_Token() -> None:
             
         except requests.exceptions.RequestException as e:
             print(Fore.RED + f"Error while refreshing access token: {e}")
-
-def on_GPIO_Event():
-    print("TODO")
 
 
 def start():
