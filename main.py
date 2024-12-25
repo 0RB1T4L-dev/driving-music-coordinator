@@ -241,24 +241,6 @@ def start():
         GPIO.cleanup()  # Clean up the GPIO pins
     # ===============================================================================
 
-def start_debug():
-    global ACCESS_TOKEN
-    global REFRESH_TOKEN
-
-    # =================== HANDLE EXPIRING ACCESS TOKEN ==============================
-    initial_access = get_Initial_Access_And_Refresh_Token()
-
-    ACCESS_TOKEN = initial_access['access_token']
-    REFRESH_TOKEN = initial_access['refresh_token']
-    
-    #print(get_current_playing_track(ACCESS_TOKEN))
-
-    token_refresh_thread = threading.Thread(target=refresh_Access_Token, daemon=True)
-    #token_refresh_thread.start()
-    # ===============================================================================
-
-    driver = Passenger(VETOS_PER_PASSENGER)
-    driver.skip()
 
 def main():
     while True:
