@@ -28,14 +28,13 @@ class Passenger:
         global SKIPS_IN_FIRST_10_SECONDS
 
         current_song = get_current_playing_track(ACCESS_TOKEN)
-        print(current_song)
 
         if current_song["item"]["id"] == CURRENT_VETO_SONG_ID:
             print("Song is protected by veto")
             return
 
         if current_song["item"]["id"] != self.last_song_skipped:
-            self.last_song_skipped = current_song
+            self.last_song_skipped = current_song["item"]["id"]
 
             if current_song["progress_ms"] < 10000:
                 SKIPS_IN_FIRST_10_SECONDS += 1
@@ -47,11 +46,14 @@ class Passenger:
                     SKIPS_IN_FIRST_10_SECONDS = 0
 
             SKIP_COUNTER += 1
+            print(f"Skip counter for current song {SKIP_COUNTER}/4")
 
             if SKIP_COUNTER > 2:
                 skip_track(ACCESS_TOKEN)
                 SKIP_COUNTER = 0
                 SKIPS_IN_FIRST_10_SECONDS = 0
+        else:
+            print("Song was already skipped")
     
     def veto(self):
         global SKIP_COUNTER
@@ -60,6 +62,7 @@ class Passenger:
         SKIP_COUNTER = 0
         if self.veto_counter > 0:
             print("Song is now protected by veto...")
+            self.veto_counter -= 1
             CURRENT_VETO_SONG_ID = get_current_playing_track(ACCESS_TOKEN)["item"]["id"]
 
 def get_current_playing_track(access_token: str) -> dict:
@@ -185,7 +188,6 @@ def refresh_Access_Token() -> None:
         except requests.exceptions.RequestException as e:
             print(Fore.RED + f"Error while refreshing access token: {e}")
 
-
 def start():
     global ACCESS_TOKEN
     global REFRESH_TOKEN
@@ -240,7 +242,6 @@ def start():
     finally:
         GPIO.cleanup()  # Clean up the GPIO pins
     # ===============================================================================
-
 
 def main():
     while True:
