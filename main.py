@@ -13,7 +13,7 @@ REFRESH_TOKEN = None
 SKIP_COUNTER = 0
 CURRENT_VETO_SONG_ID = 0
 
-SKIPS_IN_FIRST_10_SECONDS = 0
+SKIPS_IN_FIRST_20_SECONDS = 0
 
 VETOS_PER_PASSENGER = 20
 
@@ -25,9 +25,11 @@ class Passenger:
     
     def skip(self):
         global SKIP_COUNTER
-        global SKIPS_IN_FIRST_10_SECONDS
+        global SKIPS_IN_FIRST_20_SECONDS
 
         current_song = get_current_playing_track(ACCESS_TOKEN)
+        track_name = current_song["item"]["name"]
+        artist_name = ", ".join(artist["name"] for artist in current_song["item"]["artists"])
 
         if current_song["item"]["id"] == CURRENT_VETO_SONG_ID:
             print("Song is protected by veto")
@@ -36,24 +38,27 @@ class Passenger:
         if current_song["item"]["id"] != self.last_song_skipped:
             self.last_song_skipped = current_song["item"]["id"]
 
-            if current_song["progress_ms"] < 10000:
-                SKIPS_IN_FIRST_10_SECONDS += 1
+            if current_song["progress_ms"] < 20000:
+                SKIPS_IN_FIRST_20_SECONDS += 1
 
-                if SKIPS_IN_FIRST_10_SECONDS == 2:
+                if SKIPS_IN_FIRST_20_SECONDS == 2:
                     print("Skipping song...")
                     skip_track(ACCESS_TOKEN)
                     SKIP_COUNTER = 0
-                    SKIPS_IN_FIRST_10_SECONDS = 0
+                    SKIPS_IN_FIRST_20_SECONDS = 0
+                    time.sleep(1.0)
 
             SKIP_COUNTER += 1
-            print(f"Skip counter for current song {SKIP_COUNTER}/4")
+            print(f"{SKIP_COUNTER}/4 wants to skip: {track_name} by {artist_name}")
 
             if SKIP_COUNTER > 2:
+                print("Skipping song...")
                 skip_track(ACCESS_TOKEN)
                 SKIP_COUNTER = 0
-                SKIPS_IN_FIRST_10_SECONDS = 0
+                SKIPS_IN_FIRST_20_SECONDS = 0
+                time.sleep(1.0)
         else:
-            print("Song was already skipped")
+            print("You already voted for a Skip for this Song")
     
     def veto(self):
         global SKIP_COUNTER
@@ -62,7 +67,6 @@ class Passenger:
         SKIP_COUNTER = 0
         if self.veto_counter > 0:
             print("Song is now protected by veto...")
-            self.veto_counter -= 1
             CURRENT_VETO_SONG_ID = get_current_playing_track(ACCESS_TOKEN)["item"]["id"]
 
 def get_current_playing_track(access_token: str) -> dict:
@@ -188,6 +192,7 @@ def refresh_Access_Token() -> None:
         except requests.exceptions.RequestException as e:
             print(Fore.RED + f"Error while refreshing access token: {e}")
 
+
 def start():
     global ACCESS_TOKEN
     global REFRESH_TOKEN
@@ -197,8 +202,12 @@ def start():
 
     ACCESS_TOKEN = initial_access['access_token']
     REFRESH_TOKEN = initial_access['refresh_token']
-    
-    print(get_current_playing_track(ACCESS_TOKEN))
+        
+    current_song = get_current_playing_track(ACCESS_TOKEN)
+    track_name = current_song["item"]["name"]
+    artist_name = ", ".join(artist["name"] for artist in current_song["item"]["artists"])
+        
+    print(f"Current song: {track_name} by {artist_name}")
 
     token_refresh_thread = threading.Thread(target=refresh_Access_Token, daemon=True)
     token_refresh_thread.start()
@@ -215,27 +224,34 @@ def start():
 
     # Define the button pins
     BUTTONS = {
-        1: {"pin": 17, "passenger": driver},
-        2: {"pin": 18, "passenger": driver},
+        1: {"pin": 6, "passenger": driver},
+        2: {"pin": 12, "passenger": driver},
         3: {"pin": 22, "passenger": passenger1},
         4: {"pin": 20, "passenger": passenger1},
-        5: {"pin": 21, "passenger": passenger2},
+        5: {"pin": 27, "passenger": passenger2},
+        6: {"pin": 16, "passenger": passenger2},
+        7: {"pin": 5, "passenger": passenger3},
+        8: {"pin": 21, "passenger": passenger3},
     }
 
     # Set up the GPIO pins for input
     for button, data in BUTTONS.items():
-        GPIO.setup(data["pin"], GPIO.IN)
+        GPIO.setup(data["pin"], GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
     try:
         while True:
+            start_time = time.time()
             for button, data in BUTTONS.items():
-                time.sleep(0.05)  # Add a small delay
-                if GPIO.input(data["pin"]) < GPIO.HIGH:
-                    if button % 2 == 0:
-                        data["passenger"].skip()
-                    else:
-                        data["passenger"].veto()
-
+                button_states = GPIO.input(data["pin"]) == GPIO.LOW
+                while button_states:   
+                    if time.time() - start_time >= 0.2: 
+                        if button % 2 == 0:
+                            data["passenger"].skip()
+                            button_states = False
+                        else:
+                            data["passenger"].veto()
+                            button_states = False
+    
     except KeyboardInterrupt:
         pass
 
